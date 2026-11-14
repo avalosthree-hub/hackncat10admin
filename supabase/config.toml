@@ -1,0 +1,4 @@
+# Resend calls this function without a Supabase JWT, so JWT checking is off.
+# The function verifies Resend's webhook signature instead.
+[functions.inbound-email]
+verify_jwt = false

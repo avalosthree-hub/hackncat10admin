@@ -27,20 +27,20 @@ export async function getAdminAssignments(authId: string): Promise<Assignment[]>
   if (error) throw error;
   return (data ?? []).map(row => {
     const institution = row.institutions as unknown as { name: string } | null;
-    return { user_id: row.user_id, institution_id: row.institution_id, role: row.role, institution_name: institution?.name };
+    return { user_id: row.user_id, institution_id: row.institution_id, role: row.role === "owner" ? "owner" as const : "admin" as const, institution_name: institution?.name };
   });
 }
 
 export async function getInstitution(id: string): Promise<Institution> {
   const { data, error } = await supabase.from("institutions").select("id,name").eq("id", id).single();
   if (error) throw error;
-  return data;
+  return { ...data, name: data.name || "Institution" };
 }
 
 export async function getMailingLists(institution: string): Promise<MailingList[]> {
   const { data, error } = await supabase.from("list").select("id,tag,institution,hashtags,created_at").eq("institution", institution).order("tag");
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(row => ({ ...row, tag: row.tag || "Untitled list", institution: row.institution || institution }));
 }
 
 export async function getSenders(institution: string): Promise<Sender[]> {
@@ -102,7 +102,7 @@ export async function removeSender(institution: string, sender: Sender) {
 export async function getCounts(institution: string): Promise<Counts> {
   const { data, error } = await supabase.rpc("admin_dashboard_counts", { p_institution: institution });
   if (error) throw error;
-  return data;
+  return data as Counts;
 }
 
 export async function getRecentPosts(institution: string): Promise<RecentPost[]> {
@@ -114,7 +114,7 @@ export async function getRecentPosts(institution: string): Promise<RecentPost[]>
 export async function getAdministrators(institution: string): Promise<Administrator[]> {
   const { data, error } = await supabase.rpc("admin_institution_roster", { p_institution: institution });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(row => ({ ...row, role: row.role === "owner" ? "owner" as const : "admin" as const }));
 }
 
 export async function assignAdministrator(institution: string, email: string) {

@@ -62,6 +62,7 @@ const preload = `(${function (ref) {
     lists:[{id:first,tag:'Engineering Updates',institution,hashtags:['Research Opportunities','Internships & Co-ops'],created_at:now},{id:second,tag:'Campus Events',institution,hashtags:['Events & Networking'],created_at:now}],
     senders:[{id:'40000000-0000-4000-8000-000000000001',list_id:first,sender_email:'engineering@university.edu',created_at:now}],
     admins:[{user_id:'profile-owner',institution_id:institution,role:'owner',email:user.email,created_at:now}],
+    events:[{id:'50000000-0000-4000-8000-000000000001',institution_id:institution,list_id:first,source_type:'derived',source_email_post_id:'post1',source_event_key:'original',title:'AI research showcase',description:'Meet campus researchers.',starts_at:null,ends_at:null,event_date:null,timezone:'America/New_York',location_name:null,location_address:null,online_url:null,registration_url:null,rsvp_enabled:false,capacity:null,status:'published',admin_locked:false,evidence:{extraction:{text:'Join the showcase',confidence:'model_extracted'}},verification:'incomplete',cancelled_at:null,cancellation_reason:null,created_at:now,updated_at:now}],
     requests:[],
   };
   const originalFetch = window.fetch.bind(window);
@@ -86,6 +87,18 @@ const preload = `(${function (ref) {
     if (url.pathname.endsWith('/rpc/admin_dashboard_counts')) return reply({lists:data.lists.length,senders:data.senders.length,administrators:data.admins.length});
     if (url.pathname.endsWith('/rpc/admin_institution_roster')) return reply(data.admins);
     if (url.pathname.endsWith('/rpc/assign_institution_admin_by_email')) { data.admins.push({user_id:'profile-staff',institution_id:institution,role:'admin',email:body.p_email,created_at:now}); return reply(null); }
+    if (url.pathname.endsWith('/rpc/admin_event_metrics')) return reply(body.p_events.map(event_id=>({event_id,going:1,interested:2,not_going:0})));
+    if (url.pathname.endsWith('/rpc/admin_event_attendees')) return reply({attendees:[{email:'student@university.edu',status:'going',updated_at:now}],hasMore:false});
+    if (url.pathname.endsWith('/rpc/admin_event_original')) return reply({title:'Original announcement',raw_email:{text:'Join the showcase'},event_times:[]});
+    if (url.pathname.endsWith('/rpc/admin_event_timestamp')) return reply(body.p_local ? new Date(body.p_local+'-05:00').toISOString() : null);
+    if (url.pathname.endsWith('/rpc/admin_create_event')) { const row={id:'50000000-0000-4000-8000-000000000002',institution_id:institution,list_id:body.p_list,source_type:'curated',source_email_post_id:null,source_event_key:null,evidence:{},admin_locked:true,cancelled_at:null,cancellation_reason:null,event_date:null,created_at:now,updated_at:now,...body.p_fields};data.events.push(row);return reply(row.id); }
+    if (url.pathname.endsWith('/events')) {
+      let rows=data.events.filter(e=>(!query.get('id')||e.id===query.get('id').slice(3))&&(!query.get('source_type')||e.source_type===query.get('source_type').slice(3))&&(!query.get('status')||e.status===query.get('status').slice(3))&&(!query.get('list_id')||e.list_id===query.get('list_id').slice(3))&&(!query.get('cancelled_at')||e.cancelled_at));
+      if(query.get('title')) rows=rows.filter(e=>e.title.toLowerCase().includes(query.get('title').slice(7,-1).toLowerCase()));
+      if(method==='PATCH') for(const row of rows) Object.assign(row,body,{admin_locked:true,updated_at:new Date().toISOString(),...(body.cancelled_at?{rsvp_enabled:false}:{})});
+      if(method==='DELETE') data.events=data.events.filter(e=>!rows.includes(e));
+      return new Response(JSON.stringify(single?rows[0]:rows),{status:200,headers:{'content-type':'application/json','content-range':`0-${Math.max(0,rows.length-1)}/${rows.length}`}});
+    }
     if (url.pathname.endsWith('/rpc/get_user_feed')) return reply({posts:[],hasMore:false,nextCursor:null});
     if (url.pathname.endsWith('/email_posts')) return reply([{id:'post1',title:'Research applications open',caption:'Explore campus research opportunities.',hashtags:['Research Opportunities'],status:'published',created_at:now}]);
     const table = url.pathname.endsWith('/list_senders') ? 'senders' : url.pathname.endsWith('/list') ? 'lists' : null;
@@ -185,6 +198,54 @@ await waitFor('!!document.querySelector("dialog[open]")');
 assert.ok(await evaluate('document.querySelector("dialog").getBoundingClientRect().width <= window.innerWidth'),'Mobile modal fits viewport');
 await fs.writeFile('/tmp/aggie-fetch-mobile.png',Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
 await click('Cancel');
+// Event administration uses the same real React UI and isolated fetch fixtures.
+await route('/admin/events');
+await waitFor('document.body.innerText.includes("AI research showcase")');
+assert.ok(await evaluate('document.body.innerText.includes("Date and time unconfirmed")'));
+await click('Manage event & RSVPs →');
+await waitFor('document.body.innerText.includes("student@university.edu")');
+await click('View authorized original email');
+await waitFor('document.body.innerText.includes("Original announcement")');
+await click('Edit event');
+await waitFor('!!document.querySelector("dialog form")');
+await fill('dialog input','Corrected research showcase');
+await submit();
+await waitFor('document.querySelector("dialog").innerText.includes("Preview event")');
+await click('Save as draft');
+await waitFor('!document.querySelector("dialog[open]") && document.body.innerText.includes("Corrected research showcase")');
+assert.equal(await evaluate('window.qaData.events[0].source_email_post_id'),'post1');
+assert.ok(await evaluate('window.qaData.events[0].admin_locked'));
+await click('+ Create event');
+await waitFor('!!document.querySelector("dialog form")');
+assert.ok(await evaluate('document.querySelector("dialog").getBoundingClientRect().width <= innerWidth'));
+await fill('dialog input','Engineering Networking Night');
+await evaluate(`(() => {const el=document.querySelector('dialog textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(el,'Connect with engineers and employers.');el.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+await fill('dialog input[type="datetime-local"]','2027-01-20T13:00');
+await fill('dialog input[type="url"]','https://university.edu/meeting');
+await fill('dialog input[type="number"]','50');
+await submit();
+await waitFor('document.querySelector("dialog").innerText.includes("Preview event")');
+assert.ok(await evaluate('document.querySelector("dialog").innerText.includes("Internal RSVPs disabled")'));
+await fs.writeFile('/tmp/aggie-fetch-event-mobile.png',Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
+await click('Publish event');
+await waitFor('!document.querySelector("dialog[open]") && document.body.innerText.includes("Engineering Networking Night") && document.body.innerText.includes("RSVP overview")');
+assert.equal(await evaluate('window.qaData.events[1].starts_at'),'2027-01-20T18:00:00.000Z');
+await click('Cancel event');
+await waitFor('!!document.querySelector("dialog[open]")');
+await click('Back');
+assert.equal(await evaluate('window.qaData.events[1].cancelled_at'),null);
+await click('Cancel event');
+await waitFor('!!document.querySelector("dialog[open]")');
+await click('Confirm');
+await waitFor('!document.querySelector("dialog[open]") && document.body.innerText.includes("Historical RSVPs are retained")');
+assert.equal(await evaluate('window.qaData.events[1].status'),'withdrawn');
+assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'),'Mobile event detail fits');
+await route('/admin/events');
+await waitFor('document.body.innerText.includes("Cancelled Events")');
+await click('Cancelled Events');
+await waitFor('document.body.innerText.includes("Engineering Networking Night") && !document.body.innerText.includes("Corrected research showcase")');
+await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+await fs.writeFile('/tmp/aggie-fetch-event-desktop.png',Buffer.from((await cdp('Page.captureScreenshot',{format:'png'})).data,'base64'));
 await evaluate('localStorage.setItem("qa-role","admin")');
 await cdp('Page.navigate', { url:appUrl+'#/admin/administrators' });
 await cdp('Page.reload', {ignoreCache:true});
@@ -194,10 +255,12 @@ await evaluate('localStorage.setItem("qa-role","student")');
 await cdp('Page.navigate', { url:appUrl+'#/admin/lists' });
 await cdp('Page.reload', {ignoreCache:true});
 await waitFor('document.body.innerText.includes("Administrator access required")');
+await route('/admin/events');
+await waitFor('document.body.innerText.includes("Administrator access required")');
 await evaluate('localStorage.setItem("qa-role","anonymous")');
 await cdp('Page.navigate', { url:appUrl+'#/admin/overview' });
 await cdp('Page.reload', {ignoreCache:true});
 await waitFor('document.body.innerText.includes("Welcome to fetchy.")');
 assert.deepEqual(runtimeErrors,[],'No unhandled browser exceptions');
-console.log('PASS: desktop overview, list creation, topic validation/save, sender add/move/remove, confirmed/cancelled list deletion, owner add/remove, mobile layout/dialog, admin owner-route denial, student denial, and unauthenticated login. API calls mocked; no live records changed.');
+console.log('PASS: desktop overview, list creation, topic validation/save, sender add/move/remove, confirmed/cancelled list deletion, owner add/remove, mobile layout/dialog, admin owner-route denial, student denial, and unauthenticated login. Event checks: derived review/original email/correction, draft save, curated preview/publication/timezone, attendee metrics, cancellation confirmation, filters, mobile layout, and student event-route denial. API calls mocked; no live records changed.');
 socket.close();

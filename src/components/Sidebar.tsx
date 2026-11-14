@@ -7,6 +7,7 @@ export default function Sidebar({ email, assignment, assignments, route, onInsti
   const items = assignment ? [
     { page: "overview", name: "Overview", icon: "▦", href: "#/admin/overview" },
     { page: "lists", name: "Mailing Lists", icon: "✉", href: "#/admin/lists" },
+    { page: "events", name: "Events", icon: "▣", href: "#/admin/events" },
     ...(assignment.role === "owner" ? [{ page: "administrators", name: "Administrators", icon: "♙", href: "#/admin/administrators" }] : []),
   ] : [];
   return <aside className="sidebar">

@@ -24,6 +24,7 @@ Hash routes work on static hosting without server rewrite rules:
 - `#/admin/overview`: institution name, list/sender/admin totals, and five recent post summaries.
 - `#/admin/lists`: institution mailing lists; create, edit, delete, search, and open details.
 - `#/admin/lists/<uuid>`: topic labels and sender address management, including moving a sender within the institution.
+- `#/admin/events`: unified curated/derived event management, preview, publication, cancellation and RSVP administration; `#/admin/events/<uuid>` opens details.
 - `#/admin/administrators`: owner-only roster and add/remove actions for regular administrators.
 - `#/feed`: the same authenticated account's student feed through the existing `get_user_feed` RPC.
 
@@ -45,7 +46,7 @@ These intentionally privileged functions use an empty `search_path`, fully quali
 
 **Legacy prototype:** `supabase/migrations/001_init.sql` and `supabase/functions/inbound-email` describe the older Student Inbox schema (`profiles`, `emails`, `students`, `tasks`, and `settings`). They are retained as historical source and are not the connected Aggie Fetch backend. Do not run that migration or deploy that old function against Aggie Fetch, and do not use `profiles.role` to grant access. This repository is not a full baseline of the shared backend; apply only the additive dashboard migration to an environment that already has the established Aggie Fetch schema. The existing Resend/OpenAI pipeline was not changed.
 
-The project did not have generated database types; the Supabase type-generation tool returned an internal error. Explicit TypeScript domain types in `src/lib/admin.ts` and `src/lib/feed.ts` follow the inspected live schema.
+Generated shared database types now live in `src/lib/database.types.ts` and parameterize the existing Supabase client. Domain adapters handle nullable legacy list/institution labels and JSON RPC responses.
 
 ## Validation
 
@@ -88,3 +89,7 @@ supabase/
   tests/                  transactional backend authorization/mutation checks
 tests/                    validation and mocked browser smoke checks
 ```
+
+## Event administration
+
+The Events section is implemented against the student website’s existing shared event and RSVP tables. The event administration migration has been applied to the connected Aggie Fetch project. See [the event administration guide](docs/events.md) for staff workflows, the compatible withdrawn/cancellation contract, access controls, database changes, changed files, test results and Outlook integration limits. No additional frontend configuration is required. Event images are omitted because the project has no storage buckets.

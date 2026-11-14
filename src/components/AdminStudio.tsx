@@ -4,6 +4,7 @@ import { getCounts, getInstitution, getMailingLists, getRecentPosts, getSenders,
 import { navigate } from "../lib/routes";
 import type { Route } from "../lib/routes";
 import MailingLists from "./MailingLists";
+import Events from "./Events";
 import Administrators from "./Administrators";
 
 export type Workspace = { institution: Institution; lists: MailingList[]; senders: Sender[] };
@@ -25,11 +26,12 @@ export default function AdminStudio({ assignment, route, onAccessRefresh }: { as
   }, [assignment.institution_id, version]);
 
   return <>
-    <div className="pageHeading"><div><span className="eyebrow">INSTITUTION WORKSPACE</span><h1>{workspace?.institution.name || "Institution administration"}</h1><p className="muted">Manage the mailing lists that keep your campus connected.</p></div><div className="pageActions"><span className="roleBadge">{assignment.role}</span><button className="secondary" disabled={loading} onClick={() => { refresh(); onAccessRefresh(); }}>Refresh</button></div></div>
+    <div className="pageHeading"><div><span className="eyebrow">INSTITUTION WORKSPACE</span><h1>{workspace?.institution.name || "Institution administration"}</h1><p className="muted">Manage the lists and events that keep your campus connected.</p></div><div className="pageActions"><span className="roleBadge">{assignment.role}</span><button className="secondary" disabled={loading} onClick={() => { refresh(); onAccessRefresh(); }}>Refresh</button></div></div>
     {error && <div className="notice error" role="alert">{error}<button className="ghost" onClick={refresh}>Try again</button></div>}
     {loading && <p role="status" className="loadingState">Loading institution workspace…</p>}
     {!error && workspace && <>
       {route.page === "overview" && <Overview key={version} institution={workspace.institution} />}
+      {route.page === "events" && <Events key={`${workspace.institution.id}:${version}`} workspace={workspace} eventId={route.eventId} />}
       {route.page === "lists" && <MailingLists workspace={workspace} listId={route.listId} onRefresh={refresh} />}
       {route.page === "administrators" && (assignment.role === "owner" ? <Administrators institution={workspace.institution.id} currentUserId={assignment.user_id} onChange={refresh} /> : <div className="card"><h2>Owner access required</h2><p>Only institution owners can manage administrators.</p><button onClick={() => navigate("/admin/overview")}>Back to overview</button></div>)}
     </>}

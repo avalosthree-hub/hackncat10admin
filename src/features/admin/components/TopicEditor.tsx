@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { normalizeLabels } from "../lib/admin";
+import { normalizeLabels } from "../api/admin";
 
 export default function TopicEditor({ labels, onChange, disabled }: { labels: string[]; onChange: (labels: string[]) => void; disabled: boolean }) {
   const [draft, setDraft] = useState("");

@@ -2,3 +2,10 @@
 # The function verifies Resend's webhook signature instead.
 [functions.inbound-email]
 verify_jwt = false
+
+# Production receiver verifies Svix; retry endpoint verifies the service-role bearer itself.
+[functions.receive-email]
+verify_jwt = false
+
+[functions.retry-email]
+verify_jwt = false

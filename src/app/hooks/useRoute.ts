@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 
-export type Route = { page: "overview" | "lists" | "administrators" | "events" | "feed"; listId?: string; eventId?: string };
+export type Route = { page: "overview" | "lists" | "administrators" | "events" | "event-review" | "topics" | "senders" | "feed"; listId?: string; eventId?: string };
 export function parseRoute(hash: string): Route {
   const path = hash.replace(/^#/, "").replace(/\/$/, "");
+  if (path === "/admin/event-review") return { page: "event-review" };
+  if (path === "/admin/topics") return { page: "topics" };
+  if (path === "/admin/senders") return { page: "senders" };
   if (path === "/feed") return { page: "feed" };
   if (path === "/admin/administrators") return { page: "administrators" };
   const event = path.match(/^\/admin\/events(?:\/([0-9a-f-]{36}))?$/i);

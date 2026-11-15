@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { assignAdministrator, getAdministrators, message, removeAdministrator } from "../lib/admin";
-import type { Administrator } from "../lib/admin";
-import Modal from "./Modal";
+import { assignAdministrator, getAdministrators, message, removeAdministrator } from "../api/admin";
+import type { Administrator } from "../api/admin";
+import Modal from "../../../components/Modal";
 
 export default function Administrators({ institution, currentUserId, onChange }: { institution: string; currentUserId: string; onChange: () => void }) {
   const [rows, setRows] = useState<Administrator[]>([]);

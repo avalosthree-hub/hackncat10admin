@@ -1,5 +1,5 @@
-import { supabase } from "./supabase";
-export type FeedPost = { id: string; created_at: string; title: string | null; caption: string | null; content: string | null; hashtags: string[] | null; list: { id: string; name: string } };
+import { supabase } from "../../../lib/supabase";
+export type FeedPost = { attachments?: unknown; id: string; created_at: string; title: string | null; caption: string | null; content: string | null; hashtags: string[] | null; list: { id: string; name: string } };
 export type Cursor = { created_at: string; id: string };
 export type FeedPage = { posts: FeedPost[]; hasMore: boolean; nextCursor: Cursor | null };
 export async function fetchFeed(cursor: Cursor | null = null): Promise<FeedPage> {

@@ -1,10 +1,11 @@
-import { supabase } from "./supabase";
-import { normalizeEmail, normalizeLabels } from "./validation";
-export { normalizeEmail, normalizeLabels } from "./validation";
+import { supabase } from "../../../lib/supabase";
+import { normalizeEmail, normalizeLabels } from "../../../lib/validation";
+export { normalizeEmail, normalizeLabels } from "../../../lib/validation";
 
 export type Assignment = { user_id: string; institution_id: string; role: "admin" | "owner"; institution_name?: string };
-export type Institution = { id: string; name: string };
-export type MailingList = { id: string; tag: string; institution: string; hashtags: string[] | null; created_at: string };
+export type Institution = { id: string; name: string; hashtags: string[] };
+export type MailingList = { description: string | null; id: string; tag: string; institution: string; hashtags: string[] | null; created_at: string };
+export type DirectorySender = { id: string; institution_id: string; sender_email: string; created_at: string };
 export type Sender = { id: string; list_id: string; sender_email: string; created_at: string };
 export type Administrator = Assignment & { email: string; created_at: string };
 export type Counts = { lists: number; senders: number; administrators: number };
@@ -12,7 +13,7 @@ export type RecentPost = { id: string; title: string | null; caption: string | n
 
 export function message(error: unknown): string {
   if (error && typeof error === "object" && "code" in error) {
-    if (error.code === "23505") return "This address or administrator is already registered. An address can belong to only one mailing list.";
+    if (error.code === "23505") return "This sender is already approved for this list, or this address or administrator is already registered.";
     if (error.code === "23503") return "A related record changed. Refresh this page and try again.";
     if (error.code === "42501") return "You do not have permission for this action. Your administrator access may have changed.";
   }
@@ -32,13 +33,13 @@ export async function getAdminAssignments(authId: string): Promise<Assignment[]>
 }
 
 export async function getInstitution(id: string): Promise<Institution> {
-  const { data, error } = await supabase.from("institutions").select("id,name").eq("id", id).single();
+  const { data, error } = await supabase.from("institutions").select("id,name,hashtags").eq("id", id).single();
   if (error) throw error;
-  return { ...data, name: data.name || "Institution" };
+  return { ...data, name: data.name || "Institution", hashtags: data.hashtags ?? [] };
 }
 
 export async function getMailingLists(institution: string): Promise<MailingList[]> {
-  const { data, error } = await supabase.from("list").select("id,tag,institution,hashtags,created_at").eq("institution", institution).order("tag");
+  const { data, error } = await supabase.from("list").select("id,tag,description,institution,hashtags,created_at").eq("institution", institution).order("tag");
   if (error) throw error;
   return (data ?? []).map(row => ({ ...row, tag: row.tag || "Untitled list", institution: row.institution || institution }));
 }
@@ -49,27 +50,28 @@ export async function getSenders(institution: string): Promise<Sender[]> {
   return data ?? [];
 }
 
-export async function createList(institution: string, name: string) {
+export async function createList(institution: string, name: string, description = "") {
   const tag = name.trim();
   if (!tag || tag.length > 150) throw new Error("Enter a list name of 1–150 characters.");
-  const { data, error } = await supabase.from("list").insert({ tag, institution, hashtags: [] }).select("id").single();
+  const { data, error } = await supabase.from("list").insert({ tag, institution, description: listDescription(description), hashtags: [] }).select("id").single();
   if (error) throw error;
   return data.id as string;
 }
 
-export async function updateList(institution: string, id: string, changes: { tag?: string; hashtags?: string[] }) {
-  const patch: { tag?: string; hashtags?: string[] } = {};
+export async function updateList(institution: string, id: string, changes: { tag?: string; description?: string }) {
+  const patch: { tag?: string; description?: string | null } = {};
   if (changes.tag !== undefined) {
     patch.tag = changes.tag.trim();
     if (!patch.tag || patch.tag.length > 150) throw new Error("Enter a list name of 1–150 characters.");
   }
-  if (changes.hashtags !== undefined) patch.hashtags = normalizeLabels(changes.hashtags);
+  if (changes.description !== undefined) patch.description = listDescription(changes.description);
   const { error } = await supabase.from("list").update(patch).eq("id", id).eq("institution", institution).select("id").single();
   if (error) throw error;
 }
 
-export async function deleteList(institution: string, id: string) {
-  const { error } = await supabase.from("list").delete().eq("id", id).eq("institution", institution).select("id").single();
+export async function deleteList(institution: string, id: string, listName: string, confirmation: string) {
+  if (confirmation !== listName) throw new Error("Type the list name exactly to confirm deletion.");
+  const { error } = await supabase.from("list").delete().eq("id", id).eq("institution", institution).eq("tag", listName).select("id").single();
   if (error) throw error;
 }
 
@@ -125,4 +127,36 @@ export async function assignAdministrator(institution: string, email: string) {
 export async function removeAdministrator(institution: string, userId: string) {
   const { error } = await supabase.from("institution_admins").delete().eq("institution_id", institution).eq("user_id", userId).eq("role", "admin").select("user_id").single();
   if (error) throw error;
+}
+
+export async function setInstitutionTopics(institution: string, topics: string[], expected: string[]) {
+ const {data,error}=await supabase.rpc('admin_set_institution_topics',{p_institution:institution,p_topics:normalizeLabels(topics),p_expected_topics:expected});
+ if(error)throw error;return data;
+}
+
+function listDescription(value: string): string | null {
+ const description=value.trim();
+ if(description.length>1000)throw new Error('Keep the description to 1,000 characters or fewer.');
+ return description||null;
+}
+
+export async function getSenderDirectory(institution: string): Promise<DirectorySender[]> {
+ const {data,error}=await supabase.from('institution_senders').select('*').eq('institution_id',institution).order('sender_email');
+ if(error)throw error;return data??[];
+}
+export async function saveDirectorySender(institution: string, email: string) {
+ const {error}=await supabase.from('institution_senders').insert({institution_id:institution,sender_email:normalizeEmail(email)});
+ if(error)throw error;
+}
+
+export async function removeDirectorySender(institution: string, senderId: string) {
+ const {error}=await supabase.rpc('admin_remove_institution_sender',{p_institution:institution,p_sender:senderId});
+ if(error)throw error;
+}
+export async function addSenders(institution: string,listId: string,emails: string[]) {
+ const addresses=[...new Set(emails.map(normalizeEmail))];
+ if(!addresses.length)throw new Error('Choose at least one saved sender.');
+ await requireList(institution,listId);
+ const {error}=await supabase.from('list_senders').insert(addresses.map(sender_email=>({list_id:listId,sender_email})));
+ if(error)throw error;
 }

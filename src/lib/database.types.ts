@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      institution_senders: {
+        Row: { id: string; institution_id: string; sender_email: string; created_at: string }
+        Insert: { id?: string; institution_id: string; sender_email: string; created_at?: string }
+        Update: { id?: string; institution_id?: string; sender_email?: string; created_at?: string }
+        Relationships: []
+      }
       ai_reply_usage: {
         Row: {
           requests: number
@@ -223,6 +229,8 @@ export type Database = {
           created_by: string | null
           description: string
           ends_at: string | null
+          schedule_type: string
+          event_end_date: string | null
           event_date: string | null
           evidence: Json
           id: string
@@ -253,6 +261,8 @@ export type Database = {
           created_by?: string | null
           description?: string
           ends_at?: string | null
+          schedule_type?: string
+          event_end_date?: string | null
           event_date?: string | null
           evidence?: Json
           id?: string
@@ -283,6 +293,8 @@ export type Database = {
           created_by?: string | null
           description?: string
           ends_at?: string | null
+          schedule_type?: string
+          event_end_date?: string | null
           event_date?: string | null
           evidence?: Json
           id?: string
@@ -386,22 +398,26 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          hashtags: string[]
           name: string | null
         }
         Insert: {
           created_at?: string
           id?: string
+          hashtags?: string[]
           name?: string | null
         }
         Update: {
           created_at?: string
           id?: string
+          hashtags?: string[]
           name?: string | null
         }
         Relationships: []
       }
       list: {
         Row: {
+          description: string | null
           created_at: string
           hashtags: string[]
           id: string
@@ -409,6 +425,7 @@ export type Database = {
           tag: string | null
         }
         Insert: {
+          description?: string | null
           created_at?: string
           hashtags?: string[]
           id?: string
@@ -416,6 +433,7 @@ export type Database = {
           tag?: string | null
         }
         Update: {
+          description?: string | null
           created_at?: string
           hashtags?: string[]
           id?: string
@@ -640,6 +658,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_remove_institution_sender: {
+        Args: { p_institution: string; p_sender: string }
+        Returns: undefined
+      }
+      admin_set_institution_topics: {
+        Args: { p_institution: string; p_topics: string[]; p_expected_topics?: string[] }
+        Returns: string[]
+      }
+      admin_derived_event_queue: {
+        Args: { p_institution: string; p_search?: string; p_list?: string; p_page?: number }
+        Returns: Json
+      }
       admin_create_event: {
         Args: { p_fields: Json; p_list: string }
         Returns: string

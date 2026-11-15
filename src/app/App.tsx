@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase, isSupabaseConfigured } from "./lib/supabase";
-import { getAdminAssignments, message } from "./lib/admin";
-import type { Assignment } from "./lib/admin";
-import { navigate, useRoute } from "./lib/routes";
-import FeedPage from "./components/FeedPage";
-import AdminStudio from "./components/AdminStudio";
-import LoginScreen from "./components/LoginScreen";
-import Sidebar from "./components/Sidebar";
-import TopBar from "./components/TopBar";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { getAdminAssignments, message } from "../features/admin/api/admin";
+import type { Assignment } from "../features/admin/api/admin";
+import { navigate, useRoute } from "./hooks/useRoute";
+import FeedPage from "../features/home/components/FeedPage";
+import AdminStudio from "../features/admin/components/AdminStudio";
+import LoginScreen from "../components/LoginScreen";
+import Sidebar from "../components/Sidebar";
+import TopBar from "../components/TopBar";
 
 export default function App() {
   return isSupabaseConfigured ? <ConfiguredApp /> : <LoginScreen />;

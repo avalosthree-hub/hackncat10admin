@@ -10,6 +10,8 @@ Create a curated event with title, description, mailing list, local start and IA
 
 Derived event review displays the source email ID/key, extraction verification and supporting evidence separately from current administrator-corrected details. Authorized administrators can view the original email as inert, read-only text. Corrections protect the event from AI reprocessing, including publication decisions. Incomplete derived dates remain unknown. Admin edits never rewrite the source email.
 
+Use **Claim event** on a derived event card or detail page to open **Verify and claim event**. Review or correct its prefilled information, supply the required start time, preview the details, and check the verification acknowledgment. **Confirm and claim event** atomically saves the corrections and converts the same event to curated. Closing the popup makes no changes. Claiming retains publication status, event ID, RSVPs, calendar links, source email, extraction evidence and unique source key; it protects the event from AI reprocessing. Claimed events appear under Curated Events, with their original email still available in the detail view. Cancelled events cannot be claimed. Concurrent changes reject stale claims and require a refresh.
+
 An Aggie Fetch RSVP is separate from external registration and Outlook calendar addition. Interested does not reserve capacity. The dashboard can unpublish (draft), hide inaccurate derived events (withdrawn), or cancel. Cancellation records server time and optional reason, disables RSVP and retains history. Cancelled events cannot be republished; create a new event when appropriate.
 
 Deletion requires confirmation and is rejected for any event with RSVP, calendar-link or cancellation history. Source email deletion is restricted while derived events reference it. Mailing lists referenced by events also remain protected by the existing foreign key. Retain these lists/events to preserve history.
@@ -18,7 +20,7 @@ Deletion requires confirmation and is rejected for any event with RSVP, calendar
 
 The existing status values remain `draft`, `published`, `withdrawn`. Hidden and cancelled events both use `withdrawn`; **`cancelled_at IS NOT NULL` distinguishes cancellation**, with `cancellation_reason` preserving its explanation. This preserves the student feed's existing publication checks without introducing an incompatible status value. `online_url` is an optional HTTPS meeting link, separate from `registration_url`.
 
-`source_type`, `source_email_post_id`, `source_event_key`, event/list/institution IDs and creation identity are immutable. Derived source references are retained. `admin_locked` protects corrections; `evidence` remains the extraction evidence captured before the correction. Raw current extraction and locations are available through the authorized original-email RPC.
+`source_email_post_id`, `source_event_key`, event/list/institution IDs and creation identity are immutable. The only source-type transition is an institution administrator claiming a non-cancelled derived event as curated. Claimed events retain both source references and their unique extraction key. `admin_locked` protects corrections; `evidence` remains the extraction evidence captured before the correction. Raw current extraction and locations are available through the authorized original-email RPC.
 
 The existing email trigger remains the source of derived events, including multi-event extraction and deadline exclusion. Its SQL date/evidence regex escaping was repaired. Reprocessing upserts on the existing `(source_email_post_id, source_event_key)` constraint. Explicit `source_event_id` is preferred; unchanged source evidence can recover an existing key even if AI changes the title. The existing deterministic title/occurrence key remains a fallback. If both source evidence and title change without a stable upstream identifier, identity cannot be inferred reliably; the old event is withdrawn rather than deleting its history. Producers should supply stable `source_event_id` values for such revisions.
 
@@ -63,12 +65,45 @@ Run SQL scripts as postgres on a development copy of the shared schema. This rep
 
 ## Changed files
 
-- `src/components/Events.tsx`: list, detail, editor/preview, original email, attendees and publication controls.
-- `src/lib/events.ts`: shared typed models and reusable scoped data access.
+- `src/features/events/components/Events.tsx`: list, detail, editor/preview, original email, attendees and publication controls.
+- `src/features/events/api/events.ts`: shared typed models and reusable scoped data access.
 - `src/lib/database.types.ts`: generated live public database schema, including event/RSVP tables and RPCs.
-- `src/lib/supabase.ts`, `admin.ts`, `feed.ts`: typed client and existing nullable/domain-response adapters.
-- `src/components/AdminStudio.tsx`, `Sidebar.tsx`, `src/lib/routes.ts`: existing role-checked workspace integration.
+- `src/lib/supabase.ts`, `src/features/admin/api/admin.ts`, `src/features/home/api/feed.ts`: typed client and existing nullable/domain-response adapters.
+- `src/features/admin/components/AdminStudio.tsx`, `src/components/Sidebar.tsx`, `src/app/hooks/useRoute.ts`: existing role-checked workspace integration.
 - `src/style.css`: responsive event forms, filters and attendance metrics using the existing design.
 - `supabase/migrations/20261114161943_event_administration.sql`: additive shared-model fields, guards, scoped RPCs, parser repair and source-key matching.
 - `supabase/tests/event_administration.sql`, `tests/browser-smoke.mjs`: SQL authorization/behavior tests and expanded UI regressions.
 - `README.md`, this document: operation, shared contract, validation and configuration details.
+
+## Claim verification
+
+`supabase/tests/claim_derived_events.sql` uses rolled-back fixtures to check student and cross-institution denial, required details, successful conversion, verified status with an optional end time, stable source identity, RSVP retention, stale writes, reverse-conversion denial, reprocessing idempotency, and source withdrawal protection. The claim migration is applied to the shared Aggie Fetch database.
+
+## Derived event verification queue
+
+Derived Events defaults to **Most RSVPs first**. The institution-authorized `admin_derived_event_queue` RPC ranks all matching derived events by Going + Interested descending, then Going descending, date and ID, before returning a 12-event page. Not Going does not increase priority. Search and mailing-list filters apply before ranking. Other sort options remain available.
+
+Derived cards show a projected attendance range from Going to Going + Interested, capped at capacity. This is an RSVP signal rather than a statistical forecast. Chips use the upper end: No RSVPs yet (0), Early traction (1–24), Growing traction (25–74), High traction (75+). Total positive RSVPs are displayed separately, including interest beyond capacity. RSVP-disabled events with no responses show zero rather than inferred interest.
+
+The queue RPC intentionally uses SECURITY DEFINER to aggregate private RSVP rows, with explicit authentication and institution-admin checks, an empty search path, and authenticated-only execution. It returns counts and event records, never student identities. SQL regression fixtures in `supabase/tests/derived_event_traction.sql` verify ranking across pages, filters, counts, and tenant/student/anonymous denial; fixtures roll back.
+
+## Dedicated Event Review workspace
+
+Open **Event Review** in the sidebar (`#/admin/event-review`). This is a separate workspace from Events, restricted to the same institution administrators. It loads derived events by Going + Interested RSVPs and opens a prefilled editor for each event. Cancelled and hidden events are excluded. Original extraction evidence and an authorized original-email viewer are available below the editor.
+
+Edit the details and choose **Preview event**. Check the verification acknowledgment, then swipe right on the preview card (or choose **Approve event →**) to save the corrections, convert the event to curated, and publish it. Required fields, timezone checks, optimistic concurrency, source identity and RSVP preservation use the existing claim backend. Failed approvals retain the edited card and show the error; **Refresh queue** reloads current event data.
+
+Swipe left or choose **Deny / skip** to discard the unsaved edits and advance. This action makes no database changes and does not hide the event from students. Skipped events stay out of the current workspace session, across page fetches; leaving the workspace or starting a new session brings them back. Approved events move out of the derived queue. The queue automatically advances and offers a new session when no eligible cards remain.
+
+Touch and mouse gestures require at least 90 pixels of deliberate horizontal movement; vertical scrolling and cancelled gestures do not submit decisions. Approval swipes are disabled until verification is acknowledged. Buttons provide the same decisions for keyboard users. Traction bands and attendance ranges sit beside publication badges on cards, event details and the review header.
+
+
+Event Review automatically loads the original email at the bottom of the source-information section for each card. The subject, sender and full saved body appear as readable text. Saved `extraction.text` and `extraction.timeText` quotations are highlighted in the subject/body with capitalization- and whitespace-tolerant matching; overlaps are merged without changing source text. Normalized or edited event values are not used as evidence. Missing quotations and unavailable bodies are explicitly identified. HTML-only messages are converted to text with script/style content removed and rendered as React text. Failed loads offer a retry; changing cards cancels stale UI updates.
+
+## All-day and date-based schedules
+
+The editor and Event Review support **Specific date and time**, **All day**, **Date only — time not specified**, and **End date only — time not specified**. All-day/date-only schedules require a start date with an optional inclusive end date; end-date-only schedules require only the end date. Timed events continue to require a start timestamp when curated or claimed. All-day and date-only events can be approved and published without inventing an exact time.
+
+`events.schedule_type` records the choice and `event_end_date` stores an optional inclusive end date. Date-based schedules keep `starts_at` and `ends_at` null. `event_date` is the start date, or the known end date for end-date-only announcements to preserve existing date-based feed consumers. The shared upcoming-events RPC keeps date ranges visible through their end date in the event timezone. Existing derived date-only records are prefilled as Date only when opened. Database constraints enforce valid date ranges and prohibit timestamps on date-based schedules; all existing institution access, source identity and RSVP controls remain in place.
+
+The admin UI displays the date range and whether it is all-day or has no specified time. Existing student calendar export/Outlook flows may still ask for time confirmation; this change does not convert those clients to all-day calendar export.

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { message } from "../lib/admin";
+import { message } from "../features/admin/api/admin";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
 export default function LoginScreen() {
@@ -27,7 +27,7 @@ export default function LoginScreen() {
 
   return (
     <main className="login"><form className="loginCard" onSubmit={submit}>
-      <div className="logoMark">🐾</div>
+      <img className="logoMark" src="/aggie-fetch-logo.png" alt="Aggie Fetch bulldog holding an envelope" width={80} height={80} />
       <span className="eyebrow">YOUR AGGIE COMMUNITY</span>
       <h1>Welcome to fetchy.</h1>
       <p>Campus updates, all in one place.</p>
